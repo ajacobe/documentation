@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: PersonList.js</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: PersonList.js</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>import React, { Component } from "react";
+import Person from "./Person";
+import { connect } from "react-redux";
+import { fetchContacts } from "./actions/contactActions";
+import myConfig from "./config";
+/**
+ * Class representing a socket connection
+ * for an overview.
+ *
+ * @class
+ */
+class PersonList extends Component {
+	constructor(props) {
+		super(props);
+
+		this.state = { id: 0, person: {}, completed: 1, toShow: { display: "block" } };
+		this.api = "http://api.local/api.php"; /**&lt; char value for api */
+	}
+
+	handleSubmit = e => {
+		e.preventDefault();
+		const newId = this.props.persons.length + 1;
+
+		const data = {
+			id: newId,
+			name: e.target.name.value,
+			age: e.target.age.value,
+			profile: ""
+		};
+
+		this.props.dispatch({ type: "ADD", data, action: "" });
+
+		this.onAdd(data);
+	};
+
+	handleUpdate = e => {
+		e.preventDefault();
+
+		let target = e.target;
+		const file = target.profile.files[0] ? target.profile.files[0] : "";
+		const data = {
+			id: target.id.value,
+			name: target.name.value,
+			age: target.age.value,
+			profile: file ? file.name : ""
+		};
+
+		this.onUpdate(data, file);
+
+		if (data.profile != "") {
+			this.props.dispatch({ type: "UPDATE", data, action: "edit", id: data.id });
+		} else {
+			this.props.dispatch({ type: "UPDATE", data, action: "", id: data.id });
+		}
+	};
+
+	onUpdate = (data, file) => {
+		this.processProfileData("update_profile", data, file);
+	};
+
+	processProfileData = (type, data, file) => {
+		var xhr = new XMLHttpRequest();
+		xhr.open("POST", this.api + "?action=" + type);
+		if (data.profile != "") {
+			xhr.upload.addEventListener("progress", this.uploadInProgress);
+			xhr.upload.addEventListener("load", this.uploadInComplete);
+			xhr.setRequestHeader("Accept", "application/json");
+			let reader = new FileReader();
+			reader.onload = function(e) {
+				let img_file = { data, title: file.name, file: reader.result };
+				xhr.send(JSON.stringify(img_file));
+			};
+			reader.readAsDataURL(file);
+		} else {
+			xhr.send(JSON.stringify({ data }));
+		}
+	};
+
+	onAdd = (data, file) => {
+		this.processProfileData("create_new", data, file);
+	};
+
+	uploadInComplete = e => {
+		this.setState({ completed: 100 });
+		setTimeout(this.props.dispatch({ type: "HIDE_EDIT_ADD_FORM", action: "" }), 1000);
+	};
+
+	uploadInProgress = e => {
+		if (e.lengthComputable) {
+			let percentage = Math.round((e.loaded * 100) / e.total);
+			this.setState({ completed: percentage });
+		}
+	};
+
+	handleAddClick = e => {
+		e.preventDefault();
+
+		this.props.dispatch({ type: "SHOW_ADD_FORM", action: "add" });
+	};
+
+	componentDidMount() {
+		fetchContacts().then(data => {
+			this.props.dispatch({ type: "FETCH_PERSONS", action: "", persons: data });
+		});
+	}
+
+	renderPersonForm = params => {
+		let person = params.person;
+		let action = params.action;
+		let width = this.state.completed ? this.state.completed : 1;
+		const style = { width: width + "%", backgroundColor: "#4caf50", height: "30px" };
+
+		const btnLabel = action === "add" ? "Add" : "Update";
+		const toShow = this.state.toShow;
+
+		return (
+			&lt;form onSubmit={action === "edit" ? this.handleUpdate : this.handleSubmit}>
+				&lt;input type="hidden" defaultValue={person.id ? person.id : null} name="id" />
+				&lt;input type="text" defaultValue={person.name ? person.name : ""} name="name" />
+				&lt;input type="number" defaultValue={person.age ? person.age : 0} name="age" />
+				{action === "edit" ? &lt;input name="profile" type="file" accept="image/*" /> : ""}
+				&lt;button>{btnLabel}&lt;/button>
+				{action === "edit" ? (
+					&lt;div style={toShow} className="progress">
+						&lt;div style={style} />
+					&lt;/div>
+				) : (
+					""
+				)}
+			&lt;/form>
+		);
+	};
+
+	renderAddPersonBtn = () => {
+		return &lt;button onClick={this.handleAddClick}>Add New Person &lt;/button>;
+	};
+
+	render() {
+		let props = this.props;
+		let action = props.action;
+		const person = props.person;
+
+		let renderForm;
+		if (action === "") {
+			renderForm = this.renderAddPersonBtn();
+		} else if (action === "add" || action === "edit") {
+			renderForm = this.renderPersonForm(props);
+		}
+
+		let persons = props.persons;
+		let rows = persons.map(person => &lt;Person key={person.id} api={this.api} person={person} />);
+		return (
+			&lt;div>
+				{renderForm}
+
+				&lt;table>
+					&lt;thead>
+						&lt;tr>
+							&lt;td>Id&lt;/td>
+							&lt;td>Profile&lt;/td>
+							&lt;td>Name&lt;/td>
+							&lt;td>Age&lt;/td>
+						&lt;/tr>
+					&lt;/thead>
+					&lt;tbody>{rows}&lt;/tbody>
+				&lt;/table>
+			&lt;/div>
+		);
+	}
+}
+
+const mapsStatetoProps = state => ({
+	persons: state.persons,
+	id: state.id,
+	person: state.person,
+	action: state.action
+});
+export default connect(mapsStatetoProps)(PersonList);
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Classes</h3><ul><li><a href="PersonList.html">PersonList</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc3/jsdoc">JSDoc 3.5.5</a> on Mon Dec 03 2018 10:06:43 GMT+0800 (PHT)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>
